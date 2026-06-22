@@ -1,5 +1,6 @@
 package com.example.aireliabilitylab.controller;
 
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -20,12 +21,8 @@ public class AiController {
         this.aiClientService = aiClientService;
     }
 
+    @PostMapping("/sentiment")
     public AiResponseDto analyzeSentiment(@Valid @RequestBody AiRequestDto request) {
         return aiClientService.analyzeSentiment(request.getText());
     }
-
-
-
-
-    
 }
