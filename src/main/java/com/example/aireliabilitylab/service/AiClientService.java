@@ -1,9 +1,15 @@
 package com.example.aireliabilitylab.service;
 
+import java.util.List;
+import java.util.Map;
+
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+
+import jakarta.annotation.PostConstruct;
 
 @Service
 public class AiClientService {
@@ -25,6 +31,39 @@ public class AiClientService {
                 .baseUrl("https://api.openai.com/v1")
                 .build();
     }
+    
+    @PostConstruct
+    public void validateApiKey() {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException("API key is not set. Please provide a valid API key.");
+        }
+    }
+
+    public String analyzeSentiment(String text) {
+
+        Map<String, Object> requestBody = Map.of(
+
+                "model", "gpt-4o-mini","temperature", 0.1, "messages", List.of(Map.of("role", "system","content", SYSTEM_PROMPT),
+                        Map.of("role", "user","content", text)
+                )
+        );
+        return restClient.post()
+
+        .uri("/chat/completions")
+        .header("Authorization", "Bearer " + apiKey)
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(requestBody)
+        .retrieve()
+        .body(String.class);
+
+}
+
+        
+    
+
+
+
+
 
 
 
