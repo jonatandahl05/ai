@@ -55,45 +55,52 @@ public class AiClientService {
     public AiResponseDto analyzeSentiment(String text) {
 
         Map<String, Object> requestBody = Map.of(
-
-                "model", "gpt-4o-mini","temperature", 0.1, "messages", List.of(Map.of("role", "system","content", SYSTEM_PROMPT),
-                        Map.of("role", "user","content", text)
+                "model", "gpt-4o-mini",
+                "temperature", 0.1,
+                "messages", List.of(
+                        Map.of("role", "system", "content", SYSTEM_PROMPT),
+                        Map.of("role", "user", "content", text)
                 )
         );
-
-        String openAiResponse = restClient.post()
-                .uri("/chat/completions")
-                .header("Authorization", "Bearer " + apiKey)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(requestBody)
-                .retrieve()
-                .body(String.class);
+    
+        String openAiResponse;
+    
         try {
-            JsonNode root = new ObjectMapper().readTree(openAiResponse);
-
-            String sentiment = root.path("choices").get(0).path("message").path("content").asText();
-
-            return new ObjectMapper().readValue(sentiment, AiResponseDto.class);
-            
+            openAiResponse = restClient.post()
+                    .uri("/chat/completions")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(requestBody)
+                    .retrieve()
+                    .body(String.class);
         } catch (Exception e) {
+            e.printStackTrace();
             return new AiResponseDto("unknown", 0);
         }
-                        
-
-
-
-}
-
-        
     
-
-
-
-
-
-
-
-
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+    
+            JsonNode root = objectMapper.readTree(openAiResponse);
+    
+            String content = root
+                    .path("choices")
+                    .get(0)
+                    .path("message")
+                    .path("content")
+                    .asText();
+    
+            System.out.println("AI content: " + content);
+    
+            return objectMapper.readValue(content, AiResponseDto.class);
+    
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new AiResponseDto("unknown", 0);
+        }
+    }
+  
+                
 
     
 
