@@ -9,18 +9,31 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import com.example.aireliabilitylab.dto.AiResponseDto;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import jakarta.annotation.PostConstruct;
 
 @Service
 public class AiClientService {
     
-    @Value("${ai.api.key}")
+    @Value("${openai.api.key}")
     private String apiKey;
 
     private final RestClient restClient;
 
-    private static final String SYSTEM_PROMPT = 
-    "You are a helpful assistant that analyzes the sentiment of the given text. Respond with a JSON object containing the sentiment (positive, negative, or neutral) and a brief explanation.";
+    private static final String SYSTEM_PROMPT = """
+    You are a sentiment analysis engine. Return ONLY valid JSON. Do not use markdown.Do not include explanations.
+    Schema:
+    {
+    
+      "sentiment": "positive|negative|neutral",
+    
+      "score": 0-100
+    
+    }
+    """;
 
     public AiClientService(){
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -39,7 +52,7 @@ public class AiClientService {
         }
     }
 
-    public String analyzeSentiment(String text) {
+    public AiResponseDto analyzeSentiment(String text) {
 
         Map<String, Object> requestBody = Map.of(
 
@@ -47,14 +60,27 @@ public class AiClientService {
                         Map.of("role", "user","content", text)
                 )
         );
-        return restClient.post()
 
-        .uri("/chat/completions")
-        .header("Authorization", "Bearer " + apiKey)
-        .contentType(MediaType.APPLICATION_JSON)
-        .body(requestBody)
-        .retrieve()
-        .body(String.class);
+        String openAiResponse = restClient.post()
+                .uri("/chat/completions")
+                .header("Authorization", "Bearer " + apiKey)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(requestBody)
+                .retrieve()
+                .body(String.class);
+        try {
+            JsonNode root = new ObjectMapper().readTree(openAiResponse);
+
+            String sentiment = root.path("choices").get(0).path("message").path("content").asText();
+
+            return new ObjectMapper().readValue(sentiment, AiResponseDto.class);
+            
+        } catch (Exception e) {
+            return new AiResponseDto("unknown", 0);
+        }
+                        
+
+
 
 }
 
