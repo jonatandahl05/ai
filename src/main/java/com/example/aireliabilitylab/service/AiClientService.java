@@ -40,7 +40,7 @@ Return ONLY this JSON structure:
 
 Rules:
 - sentiment must be one of: positive, negative, neutral
-- score must be a number between 0 and 100okej
+- score must be a number between 0 and 100
 - do not include explanation
 - do not include markdown
 - do not include any extra fields
@@ -62,7 +62,7 @@ Rules:
     @PostConstruct
     public void validateApiKey() {
         if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException("API key is not set. Please provide a valid API key.");
+            throw new IllegalStateException("CRITICAL: API key is missing.");
         }
     }
 
