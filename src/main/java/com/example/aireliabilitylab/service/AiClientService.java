@@ -2,6 +2,7 @@ package com.example.aireliabilitylab.service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -15,6 +16,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.annotation.PostConstruct;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 
 @Service
 public class AiClientService {
@@ -23,6 +26,8 @@ public class AiClientService {
     private String apiKey;
 
     private final RestClient restClient;
+
+    private final Validator validator;
 
     private static final String SYSTEM_PROMPT = """
 You are a sentiment analysis engine.
@@ -41,10 +46,13 @@ Rules:
 - do not include any extra fields
 """;
 
-    public AiClientService(){
+    public AiClientService(Validator validator) {
+        this.validator = validator;
+
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(2000); // 2 seconds
         factory.setReadTimeout(8000); // 8 seconds
+
         this.restClient = RestClient.builder()
                 .requestFactory(factory)
                 .baseUrl("https://api.openai.com/v1")
@@ -125,8 +133,16 @@ if (openAiResponse == null) {
     
             System.out.println("AI content: " + content);
     
-            return objectMapper.readValue(content, AiResponseDto.class);
-    
+            AiResponseDto responseDto = objectMapper.readValue(content, AiResponseDto.class);
+
+            Set<ConstraintViolation<AiResponseDto>> violations = validator.validate(responseDto);
+
+            if (!violations.isEmpty()) {
+                System.out.println("Validation errors: " + violations);
+                return new AiResponseDto("unknown", 0);
+            }
+
+            return responseDto;
         } catch (Exception e) {
             e.printStackTrace();
             return new AiResponseDto("unknown", 0);
