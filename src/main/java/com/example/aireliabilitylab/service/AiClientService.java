@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import com.example.aireliabilitylab.dto.AiResponseDto;
@@ -24,16 +25,21 @@ public class AiClientService {
     private final RestClient restClient;
 
     private static final String SYSTEM_PROMPT = """
-    You are a sentiment analysis engine. Return ONLY valid JSON. Do not use markdown.Do not include explanations.
-    Schema:
-    {
-    
-      "sentiment": "positive|negative|neutral",
-    
-      "score": 0-100
-    
-    }
-    """;
+You are a sentiment analysis engine.
+
+Return ONLY this JSON structure:
+{
+  "sentiment": "positive",
+  "score": 95
+}
+
+Rules:
+- sentiment must be one of: positive, negative, neutral
+- score must be a number between 0 and 100okej
+- do not include explanation
+- do not include markdown
+- do not include any extra fields
+""";
 
     public AiClientService(){
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -62,21 +68,48 @@ public class AiClientService {
                         Map.of("role", "user", "content", text)
                 )
         );
+
+        int maxRetries = 3;
+        long delay = 1000; // initial delay in milliseconds
     
         String openAiResponse;
     
+        openAiResponse = null;
+
+for (int attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+        openAiResponse = restClient.post()
+                .uri("/chat/completions")
+                .header("Authorization", "Bearer " + apiKey)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(requestBody)
+                .retrieve()
+                .body(String.class);
+
+        break;
+
+    } catch (HttpClientErrorException.TooManyRequests e) {
+        System.out.println("429 Too Many Requests. Attempt " + attempt + " of " + maxRetries);
+        System.out.println("Waiting " + delay + " ms before retrying...");
+
         try {
-            openAiResponse = restClient.post()
-                    .uri("/chat/completions")
-                    .header("Authorization", "Bearer " + apiKey)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(requestBody)
-                    .retrieve()
-                    .body(String.class);
-        } catch (Exception e) {
-            e.printStackTrace();
+            Thread.sleep(delay);
+        } catch (InterruptedException interruptedException) {
+            Thread.currentThread().interrupt();
             return new AiResponseDto("unknown", 0);
         }
+
+        delay *= 2;
+
+    } catch (Exception e) {
+        e.printStackTrace();
+        return new AiResponseDto("unknown", 0);
+    }
+}
+
+if (openAiResponse == null) {
+    return new AiResponseDto("unknown", 0);
+}
     
         try {
             ObjectMapper objectMapper = new ObjectMapper();
