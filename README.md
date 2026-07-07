@@ -1,112 +1,72 @@
-# AI Reliability Assessment
+# AI Reliability Lab – Säkerhetsrapport
 
-## Prompt Strategy
+## Översikt
 
-Applikationen använder OpenAI:s Chat Completions API för att analysera sentiment i en text.
-
-För att få ett konsekvent svar används en **System Prompt** som instruerar modellen att endast returnera ett JSON-objekt med följande struktur:
-
-```json
-{
-  "sentiment": "positive",
-  "score": 95
-}
-```
-
-Prompten innehåller även regler som säger att:
-
-- endast JSON får returneras
-- inga förklaringar eller markdown får skickas tillbaka
-- `sentiment` ska vara `positive`, `negative` eller `neutral`
-- `score` ska vara ett tal mellan 0 och 100
-
-Dessutom används `temperature = 0.1`, vilket gör att modellen ger mer konsekventa och förutsägbara svar.
+Detta projekt bygger vidare på Labb 1 där en Spring Boot-applikation utvecklades för att analysera sentiment med hjälp av OpenAI:s API. I denna labb har fokus legat på att göra applikationen säkrare och mer robust samt att containerisera den med Docker och automatisera byggprocessen med GitHub Actions.
 
 ---
 
-## Error Mitigation
+## Identifierade säkerhetsproblem
 
-För att göra applikationen mer robust har flera skydd implementerats.
+### OWASP A01 – Broken Access Control
 
-### API Key & Fail Fast
+**Problem**
 
-API-nyckeln lagras som en miljövariabel istället för direkt i koden.
+API-endpointen kunde från början anropas av vem som helst. Eftersom applikationen använder OpenAI:s API hade detta kunnat leda till obehörig användning och onödiga kostnader.
 
-Vid uppstart kontrolleras att nyckeln finns med hjälp av en `@PostConstruct`-metod. Om nyckeln saknas kastas ett `IllegalStateException`, vilket gör att applikationen avslutas direkt istället för att starta med en felaktig konfiguration.
+**Åtgärd**
 
-### Timeouts
-
-För att undvika att applikationen väntar för länge på svar från OpenAI används en `SimpleClientHttpRequestFactory`.
-
-Nuvarande timeout-inställningar är:
-
-- Connect Timeout: **2000 ms**
-- Read Timeout: **8000 ms**
-
-Om OpenAI inte svarar inom dessa tidsgränser avbryts anropet automatiskt.
-
-### Rate Limits (Exponential Backoff)
-
-Om OpenAI returnerar **HTTP 429 (Too Many Requests)** försöker applikationen automatiskt igen.
-
-Maximalt tre försök görs.
-
-Väntetiden ökar mellan varje försök:
-
-- Försök 1 → 1 sekund
-- Försök 2 → 2 sekunder
-- Försök 3 → 4 sekunder
-
-Detta minskar belastningen på API:t och ökar chansen att anropet lyckas.
-
-### Validation
-
-När OpenAI svarar parsas JSON-svaret med Jackson (`ObjectMapper`) till ett `AiResponseDto`.
-
-Objektet valideras sedan med Bean Validation.
-
-Följande regler kontrolleras:
-
-- `sentiment` måste vara `positive`, `negative`, `neutral` eller `unknown`
-- `score` måste ligga mellan **0** och **100**
-
-Om valideringen misslyckas returneras ett fallback-svar.
-
-### Fallback
-
-Om något går fel, till exempel:
-
-- timeout
-- felaktigt JSON
-- valideringsfel
-- annat oväntat fel
-
-returneras istället:
-
-```json
-{
-  "sentiment": "unknown",
-  "score": 0
-}
-```
-
-Detta gör att applikationen inte kraschar även om AI-tjänsten returnerar ett oväntat svar.
+Jag implementerade en egen API-nyckel som måste skickas i headern `X-API-KEY`. Om nyckeln saknas eller är fel returnerar applikationen HTTP 401 Unauthorized.
 
 ---
 
-## Reliability Assessment
+### OWASP A05 – Security Misconfiguration
 
-LLM:er är kraftfulla men inte helt tillförlitliga. De kan ibland returnera felaktig information eller svar som inte följer instruktionerna.
+**Problem**
 
-För att minska dessa risker har följande lösningar implementerats:
+OpenAI API-nyckeln får inte ligga hårdkodad i projektet eftersom den då riskerar att hamna på GitHub eller delas med andra.
 
-- System Prompt för ett bestämt JSON-format
-- Låg temperature (`0.1`) för mer konsekventa svar
-- Fail Fast om API-nyckeln saknas
-- Timeouts för att undvika långa väntetider
+**Åtgärd**
+
+API-nyckeln lagras som en miljövariabel (`OPENAI_API_KEY`) och läses in av Spring Boot. Jag implementerade även Fail Fast med `@PostConstruct`, vilket gör att applikationen avslutas direkt om nyckeln saknas.
+
+---
+
+### Robust felhantering
+
+**Problem**
+
+Applikationen är beroende av en extern AI-tjänst. Om tjänsten svarar långsamt, returnerar HTTP 429 eller skickar tillbaka ett oväntat svar finns risk att applikationen inte fungerar som den ska.
+
+**Åtgärd**
+
+För att göra applikationen mer robust implementerade jag:
+
+- Connect Timeout (2 sekunder)
+- Read Timeout (8 sekunder)
 - Exponential Backoff vid HTTP 429
-- Parsing av JSON med Jackson
 - Bean Validation av AI-svaret
-- Fallback-svar om något går fel
+- Fallback-svar (`unknown`, `0`) om något går fel
 
-Dessa åtgärder gör applikationen mer robust och säkerställer att vanliga fel kan hanteras utan att applikationen kraschar.
+---
+
+## Docker och CI/CD
+
+Applikationen containeriserades med Docker genom en multi-stage Dockerfile.
+
+Jag skapade även en GitHub Actions-pipeline som automatiskt:
+
+- bygger projektet
+- kör tester
+- bygger Docker-imagen
+- publicerar imagen till Docker Hub
+
+GitHub Secrets används för att lagra känslig information, exempelvis Docker Hub-token.
+
+---
+
+## Reflektion
+
+Den här labben har visat hur viktigt det är att tänka på säkerhet redan under utvecklingen. Genom att skydda endpointen, använda miljövariabler och implementera felhantering blir applikationen både säkrare och mer tillförlitlig.
+
+Docker och GitHub Actions gör dessutom att projektet blir enklare att bygga, testa och distribuera på ett automatiserat sätt.
